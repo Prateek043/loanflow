@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Loan Journey Viewer</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0b0e14; --panel: #121722; --panel2: #171d2a; --line: #232b3b; --line2: #2e3850;
+  --text: #e6e9f0; --muted: #8a93a8; --dim: #5b647a;
+  --ok: #34d399; --ok-bg: rgba(52,211,153,.12);
+  --warn: #fbbf24; --warn-bg: rgba(251,191,36,.12);
+  --err: #f87171; --err-bg: rgba(248,113,113,.12);
+  --info: #60a5fa; --info-bg: rgba(96,165,250,.12);
+  --accent: #a78bfa; --accent-bg: rgba(167,139,250,.14);
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif; }
+a { color: var(--info); text-decoration: none; }
+button { font: inherit; cursor: pointer; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 20px 80px; }
+
+/* top bar */
+header { position: sticky; top: 0; z-index: 20; background: rgba(11,14,20,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+header .wrap { display: flex; gap: 16px; align-items: center; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; }
+.brand { font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--info)); box-shadow: 0 0 12px var(--accent); }
+.brand small { color: var(--muted); font-weight: 500; }
+form.search { display: flex; gap: 8px; flex-wrap: wrap; }
+input { background: var(--panel); border: 1px solid var(--line2); color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; }
+input[type=text] { width: 270px; font-family: var(--mono); font-size: 13px; }
+input[type=datetime-local] { color-scheme: dark; font-size: 12.5px; }
+input:focus { outline: none; border-color: var(--accent); }
+.btn { background: var(--accent); color: #0b0e14; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: wait; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line2); font-weight: 500; }
+
+/* empty / loading */
+.hero { text-align: center; padding: 120px 20px; color: var(--muted); }
+.hero h2 { color: var(--text); margin: 0 0 8px; font-size: 22px; }
+.spinner { width: 28px; height: 28px; border: 3px solid var(--line2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-box { background: var(--err-bg); border: 1px solid rgba(248,113,113,.35); color: var(--err); padding: 14px 16px; border-radius: 10px; margin-top: 24px; font-family: var(--mono); font-size: 13px; }
+
+/* summary */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 24px; }
+.summary > div { background: var(--panel); padding: 14px 16px; }
+.summary .k { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
+.summary .v { font-size: 17px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.summary .v.mono { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+.summary .v.err { color: var(--err); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); }
+.arrow { color: var(--dim); font-size: 12px; }
+
+h3.section { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 36px 0 12px; display: flex; align-items: center; gap: 12px; }
+h3.section .legend { margin-left: auto; display: flex; gap: 14px; text-transform: none; letter-spacing: 0; font-size: 12px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+/* funnel */
+.funnel { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 6px; }
+.stage { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px 10px; cursor: pointer; transition: transform .12s, border-color .12s; min-height: 118px; display: flex; flex-direction: column; }
+.stage:hover { transform: translateY(-2px); border-color: var(--line2); }
+.stage.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.stage .num { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.stage .name { font-weight: 600; font-size: 12.5px; line-height: 1.25; margin: 4px 0 auto; }
+.stage .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 8px; }
+.stage .bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 10px 10px 0 0; }
+.stage .badge { position: absolute; top: 8px; right: 8px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
+.stage.done .bar { background: var(--ok); }
+.stage.recovered .bar { background: var(--warn); }
+.stage.recovered .badge { background: var(--warn-bg); color: var(--warn); }
+.stage.failed .bar { background: var(--err); }
+.stage.failed { background: linear-gradient(180deg, var(--err-bg), var(--panel) 60%); }
+.stage.failed .badge { background: var(--err-bg); color: var(--err); }
+.stage.pending { opacity: .42; border-style: dashed; }
+.stage.pending .bar { background: var(--line2); }
+.stage .icon { font-size: 15px; }
+.stage.done .icon { color: var(--ok); } .stage.recovered .icon { color: var(--warn); } .stage.failed .icon { color: var(--err); } .stage.pending .icon { color: var(--dim); }
+
+/* gantt */
+.gantt { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 10px; }
+.gantt .row { display: grid; grid-template-columns: 160px 1fr 70px; align-items: center; gap: 12px; height: 22px; font-size: 12px; }
+.gantt .row .lbl { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt .track { position: relative; height: 10px; background: rgba(255,255,255,.025); border-radius: 5px; }
+.gantt .seg { position: absolute; top: 0; height: 10px; border-radius: 5px; min-width: 4px; }
+.gantt .tick { position: absolute; top: -2px; width: 2px; height: 14px; background: var(--err); border-radius: 1px; }
+.gantt .dur { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 11px; }
+.gantt .axis { display: grid; grid-template-columns: 160px 1fr 70px; gap: 12px; font-size: 10.5px; color: var(--dim); font-family: var(--mono); margin-top: 6px; }
+.gantt .axis div:nth-child(2) { display: flex; justify-content: space-between; }
+
+/* toolbar */
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line2); border-radius: 999px; font-size: 12.5px; color: var(--muted); background: transparent; user-select: none; }
+.toggle.on { color: var(--text); border-color: var(--accent); background: var(--accent-bg); }
+.toolbar input[type=text] { width: 220px; padding: 6px 10px; font-size: 12.5px; }
+.toolbar .count { margin-left: auto; color: var(--dim); font-size: 12px; }
+
+/* pipeline */
+.pipeline { margin-top: 14px; position: relative; }
+.group-h { display: flex; align-items: center; gap: 10px; margin: 22px 0 8px; }
+.group-h .pill { font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line2); }
+.group-h .pill.done { color: var(--ok); border-color: rgba(52,211,153,.35); }
+.group-h .pill.recovered { color: var(--warn); border-color: rgba(251,191,36,.35); }
+.group-h .pill.failed { color: var(--err); border-color: rgba(248,113,113,.35); }
+.group-h .pill.ctx { color: var(--muted); }
+.group-h .ln { flex: 1; height: 1px; background: var(--line); }
+.group-h .t { color: var(--dim); font-size: 11.5px; font-family: var(--mono); }
+
+.marker { margin: 10px 0 10px 88px; font-size: 12px; padding: 6px 12px; border-radius: 8px; display: inline-flex; gap: 8px; align-items: center; }
+.marker.idle { color: var(--muted); background: rgba(255,255,255,.03); border: 1px dashed var(--line2); }
+.marker.back { color: var(--warn); background: var(--warn-bg); border: 1px solid rgba(251,191,36,.3); }
+
+.call { display: grid; grid-template-columns: 76px 14px 1fr; gap: 0 10px; }
+.call .time { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; padding-top: 11px; line-height: 1.2; }
+.call .time small { display: block; color: var(--dim); font-size: 10.5px; margin-top: 2px; }
+.call .rail { position: relative; }
+.call .rail::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+.call .rail::after { content: ''; position: absolute; left: 2px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); border: 2px solid var(--ok); }
+.call.e4 .rail::after, .call.e5 .rail::after { border-color: var(--err); background: var(--err); }
+.call.ctx .rail::after { border-color: var(--dim); width: 8px; height: 8px; left: 3px; top: 15px; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 4px 0; overflow: hidden; }
+.call.e4 .card, .call.e5 .card { border-color: rgba(248,113,113,.4); background: linear-gradient(90deg, var(--err-bg), var(--panel) 40%); }
+.call.ctx .card { background: transparent; border-color: transparent; }
+.call.ctx .card .head { opacity: .6; }
+.card .head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; min-width: 0; }
+.card .head:hover { background: rgba(255,255,255,.02); }
+.method { font-family: var(--mono); font-size: 10.5px; font-weight: 600; padding: 2px 6px; border-radius: 4px; min-width: 44px; text-align: center; }
+.m-GET { color: var(--info); background: var(--info-bg); }
+.m-POST { color: var(--ok); background: var(--ok-bg); }
+.m-PUT, .m-PATCH { color: var(--warn); background: var(--warn-bg); }
+.m-DELETE { color: var(--err); background: var(--err-bg); }
+.svc { font-size: 11px; color: var(--accent); background: var(--accent-bg); padding: 1px 7px; border-radius: 4px; font-family: var(--mono); }
+.path { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.path .id { color: var(--accent); }
+.path .q { color: var(--dim); }
+.msg { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34%; }
+.call.e4 .msg, .call.e5 .msg { color: var(--err); }
+.status { font-family: var(--mono); font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+.s2 { color: var(--ok); background: var(--ok-bg); } .s3 { color: var(--info); background: var(--info-bg); } .s4, .s5 { color: var(--err); background: var(--err-bg); } .s0 { color: var(--muted); background: var(--panel2); }
+.times { font-family: var(--mono); font-size: 11px; color: var(--warn); background: var(--warn-bg); padding: 1px 6px; border-radius: 4px; }
+.tag { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line2); padding: 0 6px; border-radius: 4px; }
+.chev { color: var(--dim); transition: transform .15s; font-size: 11px; }
+.card.open .chev { transform: rotate(90deg); }
+
+.detail { border-top: 1px solid var(--line); display: none; }
+.card.open .detail { display: block; }
+.detail .bar2 { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--panel2); flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.detail .bar2 code { font-family: var(--mono); color: var(--text); font-size: 11.5px; }
+.detail .bar2 .sp { margin-left: auto; }
+.mini { background: transparent; border: 1px solid var(--line2); color: var(--muted); border-radius: 6px; padding: 3px 9px; font-size: 11.5px; }
+.mini:hover { color: var(--text); border-color: var(--accent); }
+.rr { display: grid; grid-template-columns: 1fr 1fr; }
+.rr > div { min-width: 0; padding: 12px; }
+.rr > div + div { border-left: 1px solid var(--line); }
+.rr h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.rr h4 .sp { margin-left: auto; }
+details.hdrs { margin-bottom: 8px; font-size: 12px; }
+details.hdrs summary { cursor: pointer; color: var(--dim); }
+details.hdrs table { border-collapse: collapse; margin-top: 6px; font-family: var(--mono); font-size: 11px; width: 100%; }
+details.hdrs td { padding: 2px 8px 2px 0; vertical-align: top; word-break: break-all; }
+details.hdrs td:first-child { color: var(--muted); white-space: nowrap; }
+pre.json { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: #0a0d13; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 460px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.jk { color: #c4b5fd; } .js { color: #86efac; } .jn { color: #fcd34d; } .jb { color: #f9a8d4; } .jnull { color: var(--dim); }
+.none { color: var(--dim); font-style: italic; font-size: 12px; }
+.more { margin-top: 6px; }
+.subcalls { border-top: 1px solid var(--line); }
+.subcalls .sub { display: flex; gap: 10px; padding: 6px 12px 6px 24px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); cursor: pointer; border-bottom: 1px solid var(--line); }
+.subcalls .sub:hover { background: rgba(255,255,255,.02); color: var(--text); }
+
+/* user + login */
+.who { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.who .av { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--info)); color: #0b0e14; display: grid; place-items: center; font-weight: 700; font-size: 11px; }
+.who b { color: var(--text); font-weight: 500; }
+body.signed-out header { display: none; }
+#login { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background:
+  radial-gradient(900px 500px at 15% -10%, rgba(167,139,250,.18), transparent 60%),
+  radial-gradient(800px 500px at 110% 110%, rgba(96,165,250,.14), transparent 60%), var(--bg); }
+#login[hidden] { display: none; }
+.login-card { width: 100%; max-width: 400px; }
+.login-card .logo { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 28px; text-align: center; }
+.login-card .mark { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), var(--info)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(167,139,250,.35); }
+.login-card .mark svg { width: 30px; height: 30px; }
+.login-card h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+.login-card .sub { color: var(--muted); font-size: 13.5px; }
+.login-box { background: rgba(18,23,34,.85); border: 1px solid var(--line); border-radius: 14px; padding: 26px 24px; backdrop-filter: blur(6px); }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 12.5px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+.field input { width: 100%; padding: 10px 12px; font-size: 14px; }
+.pw { position: relative; }
+.pw button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: transparent; border: 0; color: var(--dim); font-size: 12px; padding: 4px 8px; }
+.pw button:hover { color: var(--text); }
+.login-box .btn { width: 100%; padding: 11px; font-size: 14px; margin-top: 6px; }
+.login-err { background: var(--err-bg); border: 1px solid rgba(248,113,113,.35); color: var(--err); border-radius: 8px; padding: 9px 12px; font-size: 13px; margin-bottom: 16px; }
+.login-err:empty { display: none; }
+.login-foot { text-align: center; color: var(--dim); font-size: 12px; margin-top: 18px; line-height: 1.6; }
+
+/* backend service logs */
+.svc-logs { border-top: 1px solid var(--line); }
+.sl-head { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--panel2); flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.sl-head b { color: var(--text); font-weight: 600; }
+.sl-head .sp { margin-left: auto; }
+.sl-head .how { font-size: 11px; color: var(--dim); }
+.sl-body { max-height: 520px; overflow: auto; background: #0a0d13; }
+.sl-body:empty { display: none; }
+.sl-msg { padding: 14px 12px; color: var(--muted); font-size: 12px; }
+.sl-msg.err { color: var(--err); font-family: var(--mono); }
+.ll { display: grid; grid-template-columns: 92px 130px 50px 1fr; gap: 10px; padding: 3px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; border-bottom: 1px solid rgba(255,255,255,.03); }
+.ll:hover { background: rgba(255,255,255,.025); }
+.ll .lt { color: var(--dim); }
+.ll .la { color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ll .lv { font-size: 10px; font-weight: 700; text-transform: uppercase; padding-top: 1px; }
+.ll .lx { white-space: pre-wrap; word-break: break-word; color: #c9cfdc; }
+.ll.error { background: var(--err-bg); } .ll.error .lv { color: var(--err); } .ll.error .lx { color: #fecaca; }
+.ll.warn .lv { color: var(--warn); } .ll.info .lv { color: var(--info); } .ll.debug .lv { color: var(--dim); }
+.ll .tr { color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
+.ll .cut { color: var(--dim); font-style: italic; }
+.trace-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 11.5px; color: var(--muted); align-items: center; }
+.trace-chips .chip { cursor: pointer; }
+
+@media (max-width: 1380px) { .brand small { display: none; } header input[type=text] { width: 220px; } }
+@media (max-width: 1260px) { .who b { display: none; } }
+@media (max-width: 1100px) { .funnel { grid-template-columns: repeat(7, 1fr); } }
+@media (max-width: 760px) {
+  .ll { grid-template-columns: 70px 1fr; } .ll .la, .ll .lv { display: none; }
+  .funnel { grid-template-columns: repeat(3, 1fr); }
+  .rr { grid-template-columns: 1fr; } .rr > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .msg { display: none; } .gantt .row, .gantt .axis { grid-template-columns: 100px 1fr 56px; }
+  input[type=text] { width: 100%; }
+}
+</style>
+</head>
+<body class="signed-out">
+<section id="login" hidden>
+  <div class="login-card">
+    <div class="logo">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0e14" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+      <div><h1>Loan Journey</h1><div class="sub">Sign in with your Grafana account</div></div>
+    </div>
+    <form class="login-box" id="lf" autocomplete="on">
+      <div class="login-err" id="lerr"></div>
+      <div class="field"><label for="lu">Email or username</label><input type="text" id="lu" name="username" autocomplete="username" required autofocus /></div>
+      <div class="field"><label for="lp">Password</label><div class="pw"><input type="password" id="lp" name="password" autocomplete="current-password" required /><button type="button" id="lpt">Show</button></div></div>
+      <button class="btn" id="lb">Log in</button>
+    </form>
+    <div class="login-foot">Your Grafana credentials are checked by grafana.rupeek.com. Logs are fetched with your own access.</div>
+  </div>
+</section>
+<header>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>Loan Journey <small>lmApp · Loki-prod</small></div>
+    <form class="search" id="f">
+      <input type="text" id="id" placeholder="loanRequestId" autocomplete="off" spellcheck="false" />
+      <input type="datetime-local" id="from" title="From" />
+      <input type="datetime-local" id="to" title="To" />
+      <button class="btn" id="go">Trace</button>
+    </form>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<main class="wrap" id="app" hidden>
+  <div class="hero"><h2>Trace a loan request</h2>Enter a loanRequestId to see its journey through the LM app: each stage, and every API call with its request and response.</div>
+</main>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtT = (ms) => new Date(ms).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
+const fmtD = (ms) => new Date(ms).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+function dur(ms) {
+  if (ms == null) return '—';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60), r = s % 60;
+  if (m < 60) return m + 'm ' + String(r).padStart(2, '0') + 's';
+  return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+}
+const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const IDLE_MS = 3 * 60 * 1000;
+
+let J = null; // current journey
+const ui = { hideCtx: true, errorsOnly: false, collapse: true, stage: null, q: '' };
+
+// ---------- JSON pretty + highlight ----------
+function hl(v) {
+  const s = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+  if (typeof v === 'string') return esc(s);
+  return esc(s).replace(/(&quot;(?:\\.|[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (m, str, colon, bool) => {
+    if (str) return colon ? `<span class="jk">${str}</span>${colon}` : `<span class="js">${str}</span>`;
+    if (bool) return `<span class="jb">${m}</span>`;
+    if (m === 'null') return `<span class="jnull">null</span>`;
+    return `<span class="jn">${m}</span>`;
+  });
+}
+const BODY_CAP = 30000;
+function bodyBlock(body, key) {
+  if (body == null) return '<div class="none">No body</div>';
+  const s = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+  if (s.length <= BODY_CAP) return `<pre class="json">${hl(body)}</pre>`;
+  return `<pre class="json" data-full="${key}">${esc(s.slice(0, BODY_CAP))}\n…</pre>
+    <div class="more"><button class="mini" data-expand="${key}">Show full body (${(s.length / 1024).toFixed(0)} KB)</button></div>`;
+}
+function headersBlock(h) {
+  const ks = Object.keys(h || {});
+  if (!ks.length) return '';
+  return `<details class="hdrs"><summary>Headers (${ks.length})</summary><table>${ks.map((k) => `<tr><td>${esc(k)}</td><td>${esc(h[k])}</td></tr>`).join('')}</table></details>`;
+}
+
+// ---------- rendering ----------
+function renderPath(c) {
+  const id = J.loanRequestId;
+  const p = esc(c.path).split(esc(id)).join(`<span class="id">:loanRequestId</span>`);
+  const q = c.query ? `<span class="q">${esc(c.query.length > 60 ? c.query.slice(0, 60) + '…' : c.query)}</span>` : '';
+  return p + q;
+}
+function msgOf(c) {
+  const b = c.response?.body;
+  if (b && typeof b === 'object') return b.ErrorMsg || b.UserMsg || b.message || b.code || '';
+  return typeof b === 'string' ? b.slice(0, 120) : '';
+}
+const stageName = (k) => k === 'context' ? 'Context & polling' : k === 'other' ? 'Other' : (J.stages.find((s) => s.key === k)?.name || k);
+const stageState = (k) => J.stages.find((s) => s.key === k)?.state || 'ctx';
+const cls = (c) => c.response?.status >= 500 ? 'e5' : c.response?.status >= 400 ? 'e4' : '';
+
+function renderSummary() {
+  const sc = J.statusCodes.map((s) => `<span class="chip" title="${fmtT(s.time)}">${s.code}</span>`).join('<span class="arrow">→</span>');
+  const reached = [...J.stages].reverse().find((s) => s.state !== 'pending');
+  const g = J.query;
+  const explore = `${g.grafana}/explore?orgId=1&left=${encodeURIComponent(JSON.stringify({ datasource: g.dsUid, queries: [{ refId: 'A', expr: g.logql }], range: { from: String(g.from), to: String(g.to) } }))}`;
+  return `<section class="summary">
+    <div><div class="k">Loan request</div><div class="v mono">${esc(J.loanRequestId)}</div></div>
+    <div><div class="k">Journey</div><div class="v">${J.start ? fmtD(J.start) : '—'}</div><div class="k" style="margin-top:2px">→ ${J.end ? fmtT(J.end) : ''} IST</div></div>
+    <div><div class="k">Duration</div><div class="v">${dur(J.end - J.start)}</div></div>
+    <div><div class="k">Last stage reached</div><div class="v">${reached ? esc(reached.name) : '—'}</div></div>
+    <div><div class="k">API calls</div><div class="v">${J.totalCalls}</div></div>
+    <div><div class="k">Failed calls</div><div class="v ${J.errorCount ? 'err' : ''}">${J.errorCount}</div></div>
+    <div><div class="k">Agent · App</div><div class="v mono">${esc(J.agentPhone || '—')}</div><div class="k" style="margin-top:2px">v${esc(J.versionCode || '?')}</div></div>
+    <div><div class="k">Core status</div><div class="chips">${sc || '<span class="none">—</span>'}</div><div class="k" style="margin-top:6px"><a href="${explore}" target="_blank">Open in Grafana ↗</a></div></div>
+  </section>`;
+}
+
+function renderFunnel() {
+  const icon = { done: '✓', recovered: '↻', failed: '✕', pending: '○' };
+  const cards = J.stages.map((s, i) => {
+    const d = s.start != null ? dur(s.end - s.start) : '';
+    const badge = s.errors ? `<span class="badge">${s.errors} err</span>` : '';
+    return `<div class="stage ${s.state} ${ui.stage === s.key ? 'active' : ''}" data-stage="${s.key}" title="${esc(s.name)} — ${s.state}">
+      <span class="bar"></span>${badge}
+      <div class="num">${String(i + 1).padStart(2, '0')} <span class="icon">${icon[s.state]}</span></div>
+      <div class="name">${esc(s.name)}</div>
+      <div class="meta">${s.calls ? `${s.calls} call${s.calls > 1 ? 's' : ''}<br><b style="color:var(--text);font-weight:600">${d}</b><br>${fmtT(s.start)}` : 'not reached'}</div>
+    </div>`;
+  }).join('');
+
+  const t0 = J.start, span = Math.max(1, J.end - J.start);
+  const color = { done: 'var(--ok)', recovered: 'var(--warn)', failed: 'var(--err)' };
+  const rows = J.stages.filter((s) => s.calls).map((s) => {
+    const left = ((s.start - t0) / span) * 100, w = ((s.end - s.start) / span) * 100;
+    const errTicks = J.calls.filter((c) => c.stage === s.key && c.response?.status >= 400)
+      .map((c) => `<span class="tick" style="left:${((c.time - t0) / span) * 100}%" title="${c.response.status} at ${fmtT(c.time)}"></span>`).join('');
+    return `<div class="row"><div class="lbl">${esc(s.name)}</div>
+      <div class="track"><span class="seg" style="left:${left}%;width:${w}%;background:${color[s.state]}"></span>${errTicks}</div>
+      <div class="dur">${dur(s.end - s.start)}</div></div>`;
+  }).join('');
+  const ticks = [0, .25, .5, .75, 1].map((f) => `<span>${fmtT(t0 + span * f).slice(0, 5)}</span>`).join('');
+
+  return `<h3 class="section">Funnel
+      <span class="legend"><span><i style="background:var(--ok)"></i>Success</span><span><i style="background:var(--warn)"></i>Recovered after failure</span><span><i style="background:var(--err)"></i>Failed</span><span><i style="background:var(--line2)"></i>Not reached</span></span>
+    </h3>
+    <div class="funnel">${cards}</div>
+    <div class="gantt">${rows}<div class="axis"><div></div><div>${ticks}</div><div></div></div></div>`;
+}
+
+function visibleCalls() {
+  const q = ui.q.toLowerCase();
+  return J.calls.filter((c) => {
+    if (ui.hideCtx && c.stage === 'context') return false;
+    if (ui.errorsOnly && !(c.response?.status >= 400)) return false;
+    if (ui.stage && c.stage !== ui.stage) return false;
+    if (q && !((c.path || '') + ' ' + msgOf(c) + ' ' + (c.method || '')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+// collapse consecutive identical calls (same method+path+status) — typical polling
+function collapse(calls) {
+  const out = [];
+  for (const c of calls) {
+    const last = out[out.length - 1];
+    if (ui.collapse && last && last.method === c.method && last.path === c.path && last.response?.status === c.response?.status) {
+      last.group.push(c);
+    } else out.push({ ...c, group: [c] });
+  }
+  return out;
+}
+
+function renderPipeline() {
+  const calls = collapse(visibleCalls());
+  const backs = [...J.events];
+  let html = '', curStage = null, prevTime = null;
+  calls.forEach((g, i) => {
+    const c = g.group[g.group.length - 1]; // show latest of a polling run
+    const first = g.group[0];
+    const st = first.stage === 'context' ? (curStage || 'context') : first.stage;
+    // restoration / backtrack markers
+    while (backs.length && backs[0].time <= first.time) {
+      const b = backs.shift();
+      html += `<div class="marker back">↩ Went back from <b>${esc(b.from)}</b> to <b>${esc(b.to)}</b> at ${fmtT(b.time)} (possible restoration)</div>`;
+    }
+    if (prevTime && first.time - prevTime > IDLE_MS) html += `<div class="marker idle">⏸ ${dur(first.time - prevTime)} with no API calls</div>`;
+    if (first.stage !== 'context' && first.stage !== curStage) {
+      curStage = first.stage;
+      const s = J.stages.find((x) => x.key === curStage);
+      html += `<div class="group-h"><span class="pill ${stageState(curStage)}">${esc(stageName(curStage))}</span><span class="ln"></span><span class="t">${s ? fmtT(s.start) + ' – ' + fmtT(s.end) : ''}</span></div>`;
+    } else if (i === 0) {
+      html += `<div class="group-h"><span class="pill ctx">${esc(stageName(first.stage))}</span><span class="ln"></span></div>`;
+    }
+    const gap = prevTime ? `+${dur(first.time - prevTime)}` : '';
+    prevTime = g.group[g.group.length - 1].time;
+    const status = c.response?.status;
+    const key = J.calls.indexOf(c);
+    const failInGroup = g.group.some((x) => x.response?.status >= 400);
+    html += `<div class="call ${cls(c)} ${first.stage === 'context' ? 'ctx' : ''}">
+      <div class="time">${fmtT(first.time)}<small>${gap}</small></div><div class="rail"></div>
+      <div class="card" data-key="${key}">
+        <div class="head">
+          <span class="chev">▶</span>
+          <span class="method m-${esc(c.method)}">${esc(c.method || 'LOG')}</span>
+          ${c.service ? `<span class="svc">${esc(c.service)}</span>` : ''}
+          <span class="path">${c.kind === 'raw' ? esc(c.line.slice(0, 160)) : renderPath(c)}</span>
+          ${g.group.length > 1 ? `<span class="times" title="${fmtT(first.time)} → ${fmtT(c.time)}">×${g.group.length} · ${dur(c.time - first.time)}</span>` : ''}
+          ${c.labels?.sdk ? `<span class="tag">${esc(c.labels.sdk)}</span>` : ''}
+          <span class="msg">${esc(msgOf(c))}</span>
+          <span class="status s${status ? String(status)[0] : 0}">${status ?? '—'}</span>
+        </div>
+        ${g.group.length > 1 ? `<div class="subcalls" hidden>${g.group.map((x) => `<div class="sub" data-sub="${J.calls.indexOf(x)}"><span>${fmtT(x.time)}</span><span>${x.response?.status}</span><span>${esc(msgOf(x))}</span></div>`).join('')}</div>` : ''}
+        <div class="detail"></div>
+      </div>
+    </div>`;
+  });
+  if (!calls.length) html = '<div class="hero" style="padding:40px">No calls match the current filters.</div>';
+  return html;
+}
+
+function renderDetail(c) {
+  if (c.kind === 'raw') return `<div class="rr"><div><pre class="json">${esc(c.line)}</pre></div></div>`;
+  return `<div class="bar2">
+      <code>${esc(c.url)}</code>
+      ${c.traceId ? `<span>trace <code>${esc(c.traceId)}</code></span>` : '<span>no trace id</span>'}
+      <span class="sp"></span>
+      <button class="mini" data-copy="curl" data-k="${J.calls.indexOf(c)}">Copy cURL</button>
+    </div>
+    <div class="rr">
+      <div><h4>Request <span class="method m-${esc(c.method)}">${esc(c.method)}</span><span class="sp"></span><button class="mini" data-copy="req">Copy</button></h4>${headersBlock(c.request.headers)}${bodyBlock(c.request.body, 'req')}</div>
+      <div><h4>Response <span class="status s${String(c.response.status)[0]}">${c.response.status}</span>${c.response.message ? esc(c.response.message) : ''}<span class="sp"></span><button class="mini" data-copy="res">Copy</button></h4>${headersBlock(c.response.headers)}${bodyBlock(c.response.body, 'res')}</div>
+    </div>
+    <div class="svc-logs">
+      <div class="sl-head">
+        <span>Backend service logs</span>
+        <span class="how">${c.traceId ? 'matched by trace id' : 'no trace id, so matched by loanRequestId within ±1 min'}</span>
+        <span class="sp"></span>
+        <button class="mini" data-svclogs="app">Load ${esc(c.service)} logs</button>
+        <button class="mini" data-svclogs="all" title="Search every service in the logistics namespace">Search all services</button>
+      </div>
+      <div class="sl-body"></div>
+    </div>`;
+}
+
+// ---------- backend service logs ----------
+const svcCache = new Map();
+function fmtMs(ms) { return fmtT(ms) + '.' + String(ms % 1000).padStart(3, '0'); }
+function exploreUrl(r) {
+  return `${r.grafana}/explore?orgId=1&left=${encodeURIComponent(JSON.stringify({ datasource: r.dsUid, queries: [{ refId: 'A', expr: r.logql }], range: { from: String(r.from), to: String(r.to) } }))}`;
+}
+function renderSvcLogs(r, c) {
+  const traces = new Set([...(r.traces || []), ...(c.traceId ? [c.traceId.toLowerCase()] : []), ...(r.matchedBy === 'trace' ? [r.key.toLowerCase()] : [])]);
+  const traceRe = traces.size ? new RegExp([...traces].map((x) => x.replace(/[-]/g, '\\-')).join('|'), 'gi') : null;
+  const where = r.scope === 'all' ? 'all logistics services' : esc(r.app);
+  let html = `<div class="trace-chips"><span>${r.lines.length}${r.capped ? '+' : ''} lines from <b>${where}</b> matching <code>${esc(r.key)}</code>. <a href="${exploreUrl(r)}" target="_blank">Open in Grafana ↗</a></span>`;
+  if (r.traces?.length) html += `<span style="margin-left:8px">Internal traces:</span>` + r.traces.slice(0, 8).map((t) => `<span class="chip" data-follow="${esc(t)}" title="Follow this trace across all services">${esc(t.slice(0, 12))}…</span>`).join('');
+  html += `</div>`;
+  if (!r.lines.length) return html + `<div class="sl-msg">No log lines found in ${where} for this call's window. The service may not log this request, or it may use a different id.${r.scope !== 'all' ? ' Try “Search all services”.' : ''}</div>`;
+  html += r.lines.map((l) => {
+    let x = esc(l.line);
+    if (traceRe) x = x.replace(traceRe, (m) => `<span class="tr" data-follow="${m.toLowerCase()}">${m}</span>`);
+    return `<div class="ll ${l.level}"><span class="lt">${fmtMs(l.time)}</span><span class="la" title="${esc(l.pod)}">${esc(l.app)}</span><span class="lv">${l.level}</span><span class="lx">${x}${l.truncated ? ` <span class="cut">… (${(l.truncated / 1024).toFixed(0)} KB line truncated)</span>` : ''}</span></div>`;
+  }).join('');
+  return html;
+}
+async function loadSvcLogs(card, c, scope, followTrace) {
+  const body = card.querySelector('.sl-body');
+  const trace = followTrace || c.traceId || '';
+  const qs = new URLSearchParams({ path: c.path, trace, id: J.loanRequestId, t: c.time, scope });
+  const key = qs.toString();
+  body.innerHTML = `<div class="sl-msg"><span class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin:0 8px 0 0"></span>Searching ${scope === 'all' ? 'all logistics services' : esc(c.service)} logs for <code>${esc(trace || J.loanRequestId)}</code>…</div>`;
+  try {
+    let r = svcCache.get(key);
+    if (!r) {
+      r = await api('/api/service-logs?' + key);
+      svcCache.set(key, r);
+    }
+    body.innerHTML = renderSvcLogs(r, c);
+    const firstErr = body.querySelector('.ll.error');
+    if (firstErr) body.scrollTop = firstErr.offsetTop - 60;
+  } catch (err) {
+    if (err instanceof AuthError) return;
+    body.innerHTML = `<div class="sl-msg err">${esc(err.message)}</div>`;
+  }
+}
+
+function renderToolbar() {
+  const t = (k, label) => `<button class="toggle ${ui[k] ? 'on' : ''}" data-toggle="${k}">${label}</button>`;
+  const n = visibleCalls().length;
+  return `<h3 class="section">API pipeline</h3>
+  <div class="toolbar">
+    ${t('hideCtx', 'Hide polling & context')}
+    ${t('collapse', 'Group repeated calls')}
+    ${t('errorsOnly', 'Errors only')}
+    ${ui.stage ? `<button class="toggle on" data-clear-stage>Stage: ${esc(stageName(ui.stage))} ✕</button>` : ''}
+    <input type="text" id="q" placeholder="Filter path / message…" value="${esc(ui.q)}" />
+    <span class="count">${n} of ${J.calls.length} calls</span>
+  </div>`;
+}
+
+function render() {
+  if (!J.calls.length) {
+    $('#app').innerHTML = `<div class="hero"><h2>No logs found</h2>No lmApp log lines contain <code>${esc(J.loanRequestId)}</code> in this time range. Try a wider range.</div>`;
+    return;
+  }
+  const qFocused = document.activeElement?.id === 'q';
+  $('#app').innerHTML = renderSummary() + renderFunnel() + renderToolbar() + `<div class="pipeline">${renderPipeline()}</div>`;
+  if (qFocused) { const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+}
+
+// ---------- events ----------
+document.addEventListener('click', async (e) => {
+  const st = e.target.closest('[data-stage]');
+  if (st) { ui.stage = ui.stage === st.dataset.stage ? null : st.dataset.stage; if (ui.stage) ui.hideCtx = true; render(); $('.pipeline').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  const tg = e.target.closest('[data-toggle]');
+  if (tg) { ui[tg.dataset.toggle] = !ui[tg.dataset.toggle]; render(); return; }
+  if (e.target.closest('[data-clear-stage]')) { ui.stage = null; render(); return; }
+
+  const card = e.target.closest('.card');
+  if (!card) return;
+  const sub = e.target.closest('[data-sub]');
+  const cp = e.target.closest('[data-copy]');
+  const ex = e.target.closest('[data-expand]');
+  const c = J.calls[sub ? +sub.dataset.sub : +card.dataset.key];
+  if (cp) {
+    const shown = J.calls[+(card.dataset.shown ?? card.dataset.key)];
+    const which = cp.dataset.copy;
+    const text = which === 'curl' ? `curl -X ${shown.method} '${shown.url}'` + (shown.request.body ? ` -H 'Content-Type: application/json' -d '${JSON.stringify(shown.request.body)}'` : '')
+      : JSON.stringify(which === 'req' ? shown.request.body : shown.response.body, null, 2);
+    await navigator.clipboard.writeText(text); cp.textContent = 'Copied'; setTimeout(() => (cp.textContent = which === 'curl' ? 'Copy cURL' : 'Copy'), 1200);
+    return;
+  }
+  if (ex) {
+    const shown = J.calls[+(card.dataset.shown ?? card.dataset.key)];
+    const body = ex.dataset.expand === 'req' ? shown.request.body : shown.response.body;
+    const pre = card.querySelector(`pre[data-full="${ex.dataset.expand}"]`);
+    pre.innerHTML = hl(body); pre.removeAttribute('data-full'); ex.parentElement.remove();
+    return;
+  }
+  const sl = e.target.closest('[data-svclogs]');
+  const fol = e.target.closest('[data-follow]');
+  if (sl || fol) {
+    const shown = J.calls[+(card.dataset.shown ?? card.dataset.key)];
+    if (sl) loadSvcLogs(card, shown, sl.dataset.svclogs);
+    else loadSvcLogs(card, shown, 'all', fol.dataset.follow);
+    return;
+  }
+  if (sub) { card.dataset.shown = sub.dataset.sub; card.querySelector('.detail').innerHTML = renderDetail(c); card.classList.add('open'); autoSvcLogs(card, c); return; }
+  if (e.target.closest('.detail')) return;
+  const open = !card.classList.contains('open');
+  card.classList.toggle('open', open);
+  const subs = card.querySelector('.subcalls'); if (subs) subs.hidden = !open;
+  if (open) { card.dataset.shown = card.dataset.key; card.querySelector('.detail').innerHTML = renderDetail(c); autoSvcLogs(card, c); }
+});
+document.addEventListener('input', (e) => { if (e.target.id === 'q') { ui.q = e.target.value; render(); } });
+
+// ---------- session ----------
+let ME = null, pendingId = null;
+class AuthError extends Error {}
+async function api(url, opts) {
+  const r = await fetch(url, { credentials: 'same-origin', ...opts });
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin(body.error && body.error !== 'Please sign in' ? body.error : ''); throw new AuthError(body.error || 'Signed out'); }
+  if (!r.ok) throw new Error(body.error || r.statusText);
+  return body;
+}
+function showLogin(msg = '') {
+  ME = null;
+  document.body.classList.add('signed-out');
+  $('#login').hidden = false; $('#app').hidden = true;
+  $('#lerr').textContent = msg;
+  setTimeout(() => ($('#lu').value ? $('#lp') : $('#lu')).focus(), 0);
+}
+function showApp(user) {
+  ME = user;
+  document.body.classList.remove('signed-out');
+  $('#login').hidden = true; $('#app').hidden = false;
+  const initials = (user.name || user.login).split(/[\s.@_]+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
+  $('#who').innerHTML = `<span class="av" title="${esc(user.name || user.login)}">${esc(initials)}</span><b title="${esc(user.email)}">${esc(user.name || user.login)}</b><button class="btn ghost" id="logout" style="padding:5px 10px;font-size:12px">Sign out</button>`;
+}
+$('#lpt').addEventListener('click', () => { const i = $('#lp'); i.type = i.type === 'password' ? 'text' : 'password'; $('#lpt').textContent = i.type === 'password' ? 'Show' : 'Hide'; });
+$('#lf').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#lb').disabled = true; $('#lb').textContent = 'Logging in…'; $('#lerr').textContent = '';
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('#lu').value.trim(), password: $('#lp').value }) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || 'Login failed');
+    $('#lp').value = '';
+    showApp(body.user);
+    if (pendingId) { $('#id').value = pendingId; load(pendingId); pendingId = null; }
+    else $('#id').focus();
+  } catch (err) {
+    $('#lerr').textContent = err.message;
+  } finally { $('#lb').disabled = false; $('#lb').textContent = 'Log in'; }
+});
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('#logout')) return;
+  await fetch('/api/logout', { method: 'POST' });
+  J = null; svcCache.clear();
+  $('#app').innerHTML = '<div class="hero"><h2>Trace a loan request</h2>Enter a loanRequestId to see its journey.</div>';
+  showLogin('');
+});
+
+// failed calls: fetch backend logs straight away
+function autoSvcLogs(card, c) { if (c.kind === 'http' && c.response?.status >= 400) loadSvcLogs(card, c, 'app'); }
+
+async function load(id) {
+  const from = new Date($('#from').value).getTime(), to = new Date($('#to').value).getTime();
+  $('#go').disabled = true;
+  $('#app').innerHTML = `<div class="hero"><div class="spinner"></div>Querying Loki for <code>${esc(id)}</code>…</div>`;
+  try {
+    const body = await api(`/api/journey?id=${encodeURIComponent(id)}&from=${from}&to=${to}`);
+    J = body; ui.stage = null; ui.q = '';
+    render();
+    const u = new URL(location); u.searchParams.set('id', id); u.searchParams.set('from', from); u.searchParams.set('to', to); history.replaceState(null, '', u);
+  } catch (err) {
+    if (err instanceof AuthError) { pendingId = id; return; }
+    $('#app').innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
+  } finally { $('#go').disabled = false; }
+}
+
+$('#f').addEventListener('submit', (e) => { e.preventDefault(); const id = $('#id').value.trim(); if (id) load(id); });
+(function init() {
+  const p = new URLSearchParams(location.search);
+  const now = new Date();
+  $('#from').value = toLocalInput(p.get('from') ? new Date(+p.get('from')) : new Date(now - 24 * 3600e3));
+  $('#to').value = toLocalInput(p.get('to') ? new Date(+p.get('to')) : now);
+  api('/api/me').then(({ user }) => {
+    showApp(user);
+    if (p.get('id')) { $('#id').value = p.get('id'); load(p.get('id')); }
+  }).catch((err) => {
+    if (err instanceof AuthError) pendingId = p.get('id');
+    else showLogin(err.message);
+  });
+})();
+</script>
+</body>
+</html>
