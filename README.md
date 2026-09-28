@@ -15,6 +15,32 @@ cp .env.example .env   # set SESSION_SECRET (openssl rand -hex 32)
 npm start              # → http://localhost:4747
 ```
 
+## Deploy on Vercel
+
+Vercel detects the root `server.js` as a Node.js HTTP server. The server starts
+when loaded by Vercel and defaults to `0.0.0.0` there; local runs still default
+to `127.0.0.1`. No frontend build step is needed.
+
+1. Push this project to a private Git repository, keeping `.env` excluded.
+2. Import the repository in Vercel with the **Other** framework preset and the
+   repository root as the root directory. Use `npm install` as the install
+   command, leave the build command empty, and leave the output directory unset.
+3. Add `SESSION_SECRET` in Vercel's environment variables for each environment
+   you deploy to. Generate a fresh value with `openssl rand -hex 32`; keep the
+   value stable across deployments so existing sessions remain valid.
+4. Optionally set `GRAFANA_URL` and `LOKI_DS_UID` to override the defaults in
+   `.env.example`. If you set `HOST`, use `0.0.0.0` on Vercel. No `PORT` override
+   is needed.
+5. Deploy, then check the home page, Grafana login, and a loan journey query.
+
+Grafana must be reachable from Vercel's servers. If it requires a company VPN
+or private network, arrange server-side connectivity before deploying.
+The in-memory login throttle is per instance, so it does not enforce a shared
+limit across Vercel instances. Large log queries can also hit function duration
+or response size limits; check the deployment logs if a query fails.
+
+Reference: [Vercel Node.js server documentation](https://vercel.com/docs/functions/runtimes/node-js).
+
 ## Login
 
 Each person signs in with **their own Grafana username and password**, the same ones they use for grafana.rupeek.com. There are no shared credentials on the server.
