@@ -21,7 +21,7 @@ dotenv.config();
 const GRAFANA_URL = (process.env.GRAFANA_URL || 'https://grafana.rupeek.com').replace(/\/$/, '');
 const LOKI_DS_UID = process.env.LOKI_DS_UID || 'eRl6oHbIk';
 const PORT = Number(process.env.PORT || 4747);
-const HOST = process.env.HOST || (process.env.VERCEL ? '0.0.0.0' : '127.0.0.1');
+const HOST = process.env.HOST || '127.0.0.1';
 const PAGE_LIMIT = 1000;
 const MAX_PAGES = 20;
 
@@ -429,7 +429,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (require.main === module || process.env.VERCEL) {
+if (require.main === module) {
   server.listen(PORT, HOST, () => console.log(`Loan Journey Viewer → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 }
 module.exports = { seal, unseal, parseLine, buildJourney, classify, STAGES, appForPath, redact, tracesIn, levelOf };
