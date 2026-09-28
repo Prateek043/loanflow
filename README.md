@@ -15,6 +15,24 @@ cp .env.example .env   # set SESSION_SECRET (openssl rand -hex 32)
 npm start              # → http://localhost:4747
 ```
 
+## Deploy to Vercel
+
+The Vercel function in `api/index.js` serves the page and API through the same
+handler as the local server. `vercel.json` includes the page in the function bundle.
+
+```bash
+npx vercel login
+npx vercel link
+npx vercel env add SESSION_SECRET production
+npx vercel --prod
+```
+
+Set `SESSION_SECRET` to a long random value (for example, generate one with
+`openssl rand -hex 32`). Add `GRAFANA_URL` and `LOKI_DS_UID` in Vercel if you need
+to override their defaults. Local `.env` files are excluded from deployments.
+The deployed function must be able to reach Grafana to sign in and query logs.
+The login throttle is held in memory per function instance.
+
 ## Login
 
 Each person signs in with **their own Grafana username and password**, the same ones they use for grafana.rupeek.com. There are no shared credentials on the server.

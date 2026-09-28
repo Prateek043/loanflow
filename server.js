@@ -96,6 +96,14 @@ function throttled(ip) {
 }
 
 function readJson(req, limit = 10e3) {
+  // Vercel may parse the request body before invoking the handler.
+  if (req.body !== undefined) {
+    const data = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : req.body;
+    const text = typeof data === 'string' ? data : JSON.stringify(data);
+    if (Buffer.byteLength(text) > limit) return Promise.reject(new HttpError(413, 'Body too large'));
+    try { return Promise.resolve(typeof data === 'string' ? JSON.parse(data || '{}') : data); }
+    catch { return Promise.reject(new HttpError(400, 'Invalid JSON')); }
+  }
   return new Promise((resolve, reject) => {
     let data = '';
     req.on('data', (c) => { data += c; if (data.length > limit) { reject(new HttpError(413, 'Body too large')); req.destroy(); } });
@@ -365,7 +373,7 @@ function send(res, code, body, type = 'application/json') {
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
 }
 
-const server = http.createServer(async (req, res) => {
+const handler = async (req, res) => {
   const u = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (u.pathname === '/api/login' && req.method === 'POST') {
@@ -427,9 +435,10 @@ const server = http.createServer(async (req, res) => {
     if (e.status === 401) res.setHeader('Set-Cookie', sessionCookie(req, '', 0));
     send(res, e.status || 502, { error: e.message });
   }
-});
+};
 
 if (require.main === module) {
+  const server = http.createServer(handler);
   server.listen(PORT, HOST, () => console.log(`Loan Journey Viewer → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 }
-module.exports = { seal, unseal, parseLine, buildJourney, classify, STAGES, appForPath, redact, tracesIn, levelOf };
+module.exports = { handler, seal, unseal, parseLine, buildJourney, classify, STAGES, appForPath, redact, tracesIn, levelOf };
