@@ -46,9 +46,22 @@ Each person signs in with **their own Grafana username and password**, the same 
 
 Deep link: `http://localhost:4747/?id=<loanRequestId>`. If you're signed out, the loan loads right after you log in.
 
+## Apps
+
+Choose the source in the header, or with `?app=` in the URL:
+
+| App | Journey | Stages |
+|---|---|---|
+| `lmApp` | Loan disbursal | 13 stages, from Pick & Arrive to Vault & Checkout |
+| `rmApp` | Gold release (doorstep `rlagent/*` or branch `branchrelease/*`) | Start & Arrive → Customer Auth (OTP) → Release Scope → Customer Verification → Release Approval → Packet Verification → Checkout → Documents Handover |
+
+Both apps are searched by loanRequestId. A stage the flow never used but went past (for example Customer Verification in a branch release) shows as **skipped**. A stage whose last call failed counts as **recovered**, not failed, if the journey carried on afterwards.
+
+To add another app, add an entry to `APPS` in `server.js` and an `<option>` to `#src` in `public/index.html`.
+
 ## Tuning stages
 
-Stages are regexes on the API path in `server.js` (`STAGES`). Calls matching `CONTEXT_RE` or `STATUS_RE`
+Stages are regexes on the API path in `server.js` (`LM_STAGES`, `RM_STAGES`). Calls matching `CONTEXT_RE` or `STATUS_RE`
 (getactivetransactions, flagsmith, `/status/{id}`) are treated as context and hidden by default.
 
 ## Backend service logs

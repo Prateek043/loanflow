@@ -26,7 +26,18 @@ button { font: inherit; cursor: pointer; }
 
 /* top bar */
 header { position: sticky; top: 0; z-index: 20; background: rgba(11,14,20,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-header .wrap { display: flex; gap: 16px; align-items: center; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; }
+header .wrap { display: flex; gap: 16px; align-items: center; padding-top: 12px; padding-bottom: 12px; flex-wrap: nowrap; }
+header .brand { flex: none; white-space: nowrap; }
+header form.search { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; justify-content: flex-end; }
+header form.search > * { min-width: 0; }
+header #src { flex: 0 1 auto; }
+header #id { flex: 1 1 260px; max-width: 300px; min-width: 140px; width: auto; }
+header input[type=datetime-local] { flex: 0 1 200px; min-width: 150px; }
+header #go { flex: none; }
+.who { flex: none; white-space: nowrap; }
+.who b { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1180px) { .who b { display: none; } }
+@media (max-width: 980px) { header .wrap, header form.search { flex-wrap: wrap; } header #id { max-width: none; } }
 .brand { font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; margin-right: auto; }
 .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--info)); box-shadow: 0 0 12px var(--accent); }
 .brand small { color: var(--muted); font-weight: 500; }
@@ -34,6 +45,8 @@ form.search { display: flex; gap: 8px; flex-wrap: wrap; }
 input { background: var(--panel); border: 1px solid var(--line2); color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; }
 input[type=text] { width: 270px; font-family: var(--mono); font-size: 13px; }
 input[type=datetime-local] { color-scheme: dark; font-size: 12.5px; }
+select { background: var(--panel); border: 1px solid var(--line2); color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 12.5px; color-scheme: dark; cursor: pointer; }
+select:focus { outline: none; border-color: var(--accent); }
 input:focus { outline: none; border-color: var(--accent); }
 .btn { background: var(--accent); color: #0b0e14; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 600; }
 .btn:disabled { opacity: .5; cursor: wait; }
@@ -62,7 +75,7 @@ h3.section .legend { margin-left: auto; display: flex; gap: 14px; text-transform
 .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
 
 /* funnel */
-.funnel { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 6px; }
+.funnel { display: grid; grid-template-columns: repeat(var(--n, 13), minmax(0, 1fr)); gap: 6px; }
 .stage { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px 10px; cursor: pointer; transition: transform .12s, border-color .12s; min-height: 118px; display: flex; flex-direction: column; }
 .stage:hover { transform: translateY(-2px); border-color: var(--line2); }
 .stage.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
@@ -79,6 +92,9 @@ h3.section .legend { margin-left: auto; display: flex; gap: 14px; text-transform
 .stage.failed .badge { background: var(--err-bg); color: var(--err); }
 .stage.pending { opacity: .42; border-style: dashed; }
 .stage.pending .bar { background: var(--line2); }
+.stage.skipped { opacity: .5; }
+.stage.skipped .bar { background: repeating-linear-gradient(90deg, var(--line2) 0 6px, transparent 6px 10px); }
+.stage.skipped .icon { color: var(--dim); }
 .stage .icon { font-size: 15px; }
 .stage.done .icon { color: var(--ok); } .stage.recovered .icon { color: var(--warn); } .stage.failed .icon { color: var(--err); } .stage.pending .icon { color: var(--dim); }
 
@@ -223,8 +239,6 @@ body.signed-out header { display: none; }
 .trace-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 11.5px; color: var(--muted); align-items: center; }
 .trace-chips .chip { cursor: pointer; }
 
-@media (max-width: 1380px) { .brand small { display: none; } header input[type=text] { width: 220px; } }
-@media (max-width: 1260px) { .who b { display: none; } }
 @media (max-width: 1100px) { .funnel { grid-template-columns: repeat(7, 1fr); } }
 @media (max-width: 760px) {
   .ll { grid-template-columns: 70px 1fr; } .ll .la, .ll .lv { display: none; }
@@ -253,8 +267,12 @@ body.signed-out header { display: none; }
 </section>
 <header>
   <div class="wrap">
-    <div class="brand"><span class="dot"></span>Loan Journey <small>lmApp · Loki-prod</small></div>
+    <div class="brand"><span class="dot"></span>Loan Journey</div>
     <form class="search" id="f">
+      <select id="src" title="Which app's logs to trace">
+        <option value="lmApp">LM App · Disbursal</option>
+        <option value="rmApp">RM App · Release</option>
+      </select>
       <input type="text" id="id" placeholder="loanRequestId" autocomplete="off" spellcheck="false" />
       <input type="datetime-local" id="from" title="From" />
       <input type="datetime-local" id="to" title="To" />
@@ -265,7 +283,7 @@ body.signed-out header { display: none; }
 </header>
 
 <main class="wrap" id="app" hidden>
-  <div class="hero"><h2>Trace a loan request</h2>Enter a loanRequestId to see its journey through the LM app: each stage, and every API call with its request and response.</div>
+  <div class="hero"><h2>Trace a loan request</h2>Pick the app (LM for disbursal, RM for release), then enter a loanRequestId to see its journey: each stage, and every API call with its request and response.</div>
 </main>
 
 <script>
@@ -330,7 +348,7 @@ const cls = (c) => c.response?.status >= 500 ? 'e5' : c.response?.status >= 400 
 
 function renderSummary() {
   const sc = J.statusCodes.map((s) => `<span class="chip" title="${fmtT(s.time)}">${s.code}</span>`).join('<span class="arrow">→</span>');
-  const reached = [...J.stages].reverse().find((s) => s.state !== 'pending');
+  const reached = [...J.stages].reverse().find((s) => s.state !== 'pending' && s.state !== 'skipped');
   const g = J.query;
   const explore = `${g.grafana}/explore?orgId=1&left=${encodeURIComponent(JSON.stringify({ datasource: g.dsUid, queries: [{ refId: 'A', expr: g.logql }], range: { from: String(g.from), to: String(g.to) } }))}`;
   return `<section class="summary">
@@ -340,13 +358,13 @@ function renderSummary() {
     <div><div class="k">Last stage reached</div><div class="v">${reached ? esc(reached.name) : '—'}</div></div>
     <div><div class="k">API calls</div><div class="v">${J.totalCalls}</div></div>
     <div><div class="k">Failed calls</div><div class="v ${J.errorCount ? 'err' : ''}">${J.errorCount}</div></div>
-    <div><div class="k">Agent · App</div><div class="v mono">${esc(J.agentPhone || '—')}</div><div class="k" style="margin-top:2px">v${esc(J.versionCode || '?')}</div></div>
+    <div><div class="k">${(J.agentPhones || []).length > 1 ? 'Agents' : 'Agent'} · ${esc(J.source?.app || 'app')}</div><div class="v mono">${(J.agentPhones?.length ? J.agentPhones : [J.agentPhone || '—']).map(esc).join('<br>')}</div><div class="k" style="margin-top:2px">v${esc(J.versionCode || '?')}</div></div>
     <div><div class="k">Core status</div><div class="chips">${sc || '<span class="none">—</span>'}</div><div class="k" style="margin-top:6px"><a href="${explore}" target="_blank">Open in Grafana ↗</a></div></div>
   </section>`;
 }
 
 function renderFunnel() {
-  const icon = { done: '✓', recovered: '↻', failed: '✕', pending: '○' };
+  const icon = { done: '✓', recovered: '↻', failed: '✕', pending: '○', skipped: '–' };
   const cards = J.stages.map((s, i) => {
     const d = s.start != null ? dur(s.end - s.start) : '';
     const badge = s.errors ? `<span class="badge">${s.errors} err</span>` : '';
@@ -354,7 +372,7 @@ function renderFunnel() {
       <span class="bar"></span>${badge}
       <div class="num">${String(i + 1).padStart(2, '0')} <span class="icon">${icon[s.state]}</span></div>
       <div class="name">${esc(s.name)}</div>
-      <div class="meta">${s.calls ? `${s.calls} call${s.calls > 1 ? 's' : ''}<br><b style="color:var(--text);font-weight:600">${d}</b><br>${fmtT(s.start)}` : 'not reached'}</div>
+      <div class="meta">${s.state === 'skipped' ? 'skipped' : s.calls ? `${s.calls} call${s.calls > 1 ? 's' : ''}<br><b style="color:var(--text);font-weight:600">${d}</b><br>${fmtT(s.start)}` : 'not reached'}</div>
     </div>`;
   }).join('');
 
@@ -371,9 +389,9 @@ function renderFunnel() {
   const ticks = [0, .25, .5, .75, 1].map((f) => `<span>${fmtT(t0 + span * f).slice(0, 5)}</span>`).join('');
 
   return `<h3 class="section">Funnel
-      <span class="legend"><span><i style="background:var(--ok)"></i>Success</span><span><i style="background:var(--warn)"></i>Recovered after failure</span><span><i style="background:var(--err)"></i>Failed</span><span><i style="background:var(--line2)"></i>Not reached</span></span>
+      <span class="legend"><span><i style="background:var(--ok)"></i>Success</span><span><i style="background:var(--warn)"></i>Recovered after failure</span><span><i style="background:var(--err)"></i>Failed</span><span><i style="background:var(--line2)"></i>Not reached / skipped</span></span>
     </h3>
-    <div class="funnel">${cards}</div>
+    <div class="funnel" style="--n:${J.stages.length}">${cards}</div>
     <div class="gantt">${rows}<div class="axis"><div></div><div>${ticks}</div><div></div></div></div>`;
 }
 
@@ -530,7 +548,7 @@ function renderToolbar() {
 
 function render() {
   if (!J.calls.length) {
-    $('#app').innerHTML = `<div class="hero"><h2>No logs found</h2>No lmApp log lines contain <code>${esc(J.loanRequestId)}</code> in this time range. Try a wider range.</div>`;
+    $('#app').innerHTML = `<div class="hero"><h2>No logs found</h2>No ${esc(J.source?.app || 'app')} log lines contain <code>${esc(J.loanRequestId)}</code> in this time range. Try a wider range.</div>`;
     return;
   }
   const qFocused = document.activeElement?.id === 'q';
@@ -627,7 +645,15 @@ $('#lf').addEventListener('submit', async (e) => {
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('#logout')) return;
   await fetch('/api/logout', { method: 'POST' });
-  J = null; svcCache.clear();
+  J = null; svcCache.clear(); pendingId = null;
+  // leave nothing of the last search behind for whoever signs in next
+  history.replaceState(null, '', location.pathname);
+  $('#id').value = ''; $('#src').value = 'lmApp';
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(9, 0, 0, 0);
+  $('#from').value = toLocalInput(start); $('#to').value = toLocalInput(now);
+  ui.stage = null; ui.q = '';
   $('#app').innerHTML = '<div class="hero"><h2>Trace a loan request</h2>Enter a loanRequestId to see its journey.</div>';
   showLogin('');
 });
@@ -638,12 +664,13 @@ function autoSvcLogs(card, c) { if (c.kind === 'http' && c.response?.status >= 4
 async function load(id) {
   const from = new Date($('#from').value).getTime(), to = new Date($('#to').value).getTime();
   $('#go').disabled = true;
-  $('#app').innerHTML = `<div class="hero"><div class="spinner"></div>Querying Loki for <code>${esc(id)}</code>…</div>`;
+  $('#app').innerHTML = `<div class="hero"><div class="spinner"></div>Querying ${esc($('#src').value)} logs for <code>${esc(id)}</code>…</div>`;
   try {
-    const body = await api(`/api/journey?id=${encodeURIComponent(id)}&from=${from}&to=${to}`);
+    const app = $('#src').value;
+    const body = await api(`/api/journey?app=${app}&id=${encodeURIComponent(id)}&from=${from}&to=${to}`);
     J = body; ui.stage = null; ui.q = '';
     render();
-    const u = new URL(location); u.searchParams.set('id', id); u.searchParams.set('from', from); u.searchParams.set('to', to); history.replaceState(null, '', u);
+    const u = new URL(location); u.searchParams.set('app', app); u.searchParams.set('id', id); u.searchParams.set('from', from); u.searchParams.set('to', to); history.replaceState(null, '', u);
   } catch (err) {
     if (err instanceof AuthError) { pendingId = id; return; }
     $('#app').innerHTML = `<div class="error-box">${esc(err.message)}</div>`;
@@ -653,8 +680,11 @@ async function load(id) {
 $('#f').addEventListener('submit', (e) => { e.preventDefault(); const id = $('#id').value.trim(); if (id) load(id); });
 (function init() {
   const p = new URLSearchParams(location.search);
+  if (['lmApp', 'rmApp'].includes(p.get('app'))) $('#src').value = p.get('app');
   const now = new Date();
-  $('#from').value = toLocalInput(p.get('from') ? new Date(+p.get('from')) : new Date(now - 24 * 3600e3));
+  const start = new Date(now);
+  start.setHours(9, 0, 0, 0);
+  $('#from').value = toLocalInput(p.get('from') ? new Date(+p.get('from')) : start);
   $('#to').value = toLocalInput(p.get('to') ? new Date(+p.get('to')) : now);
   api('/api/me').then(({ user }) => {
     showApp(user);

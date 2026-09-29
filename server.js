@@ -1,5 +1,5 @@
 // Loan Journey Viewer — tiny zero-dependency server.
-// Proxies Loki (via Grafana's datasource proxy) and parses lmApp HTTP logs
+// Proxies Loki (via Grafana's datasource proxy) and parses lmApp / rmApp HTTP logs
 // into a structured journey for one loanRequestId.
 //
 // Each user signs in with their own Grafana username/password; every Loki query
@@ -203,7 +203,7 @@ function parseLine(line) {
 
 // ---- stages --------------------------------------------------------------
 
-const STAGES = [
+const LM_STAGES = [
   { key: 'arrive', name: 'Pick & Arrive', re: /pickarequest|markasarrived/i },
   { key: 'agentverify', name: 'Agent Verification', re: /agentverification/i },
   { key: 'identify', name: 'Identify Customer', re: /identify-customer/i },
@@ -220,21 +220,42 @@ const STAGES = [
 ];
 // Calls that don't advance the journey (listing / polling / flags)
 const STATUS_RE = /\/api\/v1\/status\/[0-9a-f]{24}$/;
-const CONTEXT_RE = /getactivetransactions|flagsmith/i;
 
-function classify(p) {
-  if (CONTEXT_RE.test(p) || STATUS_RE.test(p)) return 'context';
-  const s = STAGES.find((st) => st.re.test(p));
+// Gold release journey (doorstep via rlagent/*, or branch via branchrelease/*)
+const RM_STAGES = [
+  { key: 'rstart', name: 'Start & Arrive', re: /rlagent\/pickarequest|rlagent\/markasarrived|branchreleasestart|branchreleasearrived/i },
+  { key: 'rauth', name: 'Customer Auth (OTP)', re: /callwithotp|rlagent\/verifyotp|releaseCustomerAuthToArrived/i },
+  { key: 'rscope', name: 'Release Scope', re: /getreleaseinfo|scopeofrelease|partreleasescope|jewel\/release\/approvalrequest|releasescope\/status/i },
+  { key: 'rverify', name: 'Customer Verification', re: /custverify|kycupload/i },
+  { key: 'rapprove', name: 'Release Approval', re: /markbranchreleasechecklist|uploadreleaseform|verifyrelease|releasedocs\/status/i },
+  { key: 'rpackets', name: 'Packet Verification', re: /verifypackets/i },
+  { key: 'rcheckout', name: 'Checkout', re: /rlagent\/checkout/i },
+  { key: 'rhandover', name: 'Documents Handover', re: /documentshandovertobranch/i },
+];
+
+// Loki `app` label → journey definition
+const APPS = {
+  lmApp: { label: 'LM App · Disbursal', stages: LM_STAGES, context: /getactivetransactions|flagsmith/i },
+  rmApp: {
+    label: 'RM App · Release', stages: RM_STAGES,
+    context: /getactivereleases|getdropoffs|fcm\/register|getAllAgentNotifs|\/v1\/loanrequest\/[0-9a-f]{24}$|findOrnament/i,
+  },
+};
+
+function classify(p, cfg = APPS.lmApp) {
+  if (cfg.context.test(p) || STATUS_RE.test(p)) return 'context';
+  const s = cfg.stages.find((st) => st.re.test(p));
   return s ? s.key : 'other';
 }
 
-function buildJourney(loanId, raw) {
+function buildJourney(loanId, raw, cfg = APPS.lmApp) {
+  const STAGES = cfg.stages;
   const calls = [];
   for (const r of raw) {
     const parsed = parseLine(r.line);
     const base = { ts: r.ts, time: Number(BigInt(r.ts) / 1000000n), labels: r.labels };
     if (!parsed) { calls.push({ ...base, kind: 'raw', stage: 'other', line: r.line.slice(0, 4000) }); continue; }
-    const stage = classify(parsed.path);
+    const stage = classify(parsed.path, cfg);
     const relevance = parsed.url.includes(loanId) || JSON.stringify(parsed.request.body || '').includes(loanId)
       ? 'direct' : 'mentioned'; // "mentioned" = id only appears inside a response (e.g. a list of loans)
     calls.push({ ...base, kind: 'http', stage, relevance, ...parsed });
@@ -245,8 +266,14 @@ function buildJourney(loanId, raw) {
     const cs = calls.filter((c) => c.stage === s.key);
     const errors = cs.filter((c) => c.response && c.response.status >= 400);
     const last = cs[cs.length - 1];
-    let state = 'pending';
-    if (cs.length) state = last.response && last.response.status >= 400 ? 'failed' : errors.length ? 'recovered' : 'done';
+    // A stage whose last call failed only counts as failed if the journey never moved past it
+    const laterCalls = calls.filter((c) => STAGES.findIndex((x) => x.key === c.stage) > idx);
+    const movedOn = laterCalls.some((c) => c.response && c.response.status < 400 && (!last || c.time > last.time));
+    let state = laterCalls.length ? 'skipped' : 'pending';
+    if (cs.length) {
+      const lastFailed = last.response && last.response.status >= 400;
+      state = lastFailed && !movedOn ? 'failed' : errors.length ? 'recovered' : 'done';
+    }
     return {
       key: s.key, name: s.name, idx, state, calls: cs.length, errors: errors.length,
       start: cs[0]?.time ?? null, end: last?.time ?? null,
@@ -276,6 +303,7 @@ function buildJourney(loanId, raw) {
   return {
     loanRequestId: loanId,
     agentPhone: labels.phoneNumber || null,
+    agentPhones: [...new Set(calls.map((c) => c.labels?.phoneNumber).filter(Boolean))],
     app: labels.app || null,
     versionCode: calls.find((c) => c.versionCode)?.versionCode || null,
     start: calls[0]?.time ?? null,
@@ -406,9 +434,13 @@ const handler = async (req, res) => {
       const now = Date.now();
       const from = Number(u.searchParams.get('from')) || now - 24 * 3600e3;
       const to = Number(u.searchParams.get('to')) || now;
-      const logql = `{app="lmApp"} |= "${id}"`;
+      const appName = u.searchParams.get('app') || 'lmApp';
+      const cfg = APPS[appName];
+      if (!cfg) return send(res, 400, { error: `Unknown app ${appName}` });
+      const logql = `{app="${appName}"} |= "${id}"`;
       const raw = await lokiQueryRange(auth, logql, BigInt(from) * 1000000n, BigInt(to) * 1000000n);
-      const journey = buildJourney(id, raw);
+      const journey = buildJourney(id, raw, cfg);
+      journey.source = { app: appName, label: cfg.label };
       journey.query = { logql, from, to, grafana: GRAFANA_URL, dsUid: LOKI_DS_UID };
       return send(res, 200, journey);
     }
@@ -441,4 +473,4 @@ if (require.main === module) {
   const server = http.createServer(handler);
   server.listen(PORT, HOST, () => console.log(`Loan Journey Viewer → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 }
-module.exports = { handler, seal, unseal, parseLine, buildJourney, classify, STAGES, appForPath, redact, tracesIn, levelOf };
+module.exports = { handler, APPS, seal, unseal, parseLine, buildJourney, classify, appForPath, redact, tracesIn, levelOf };
