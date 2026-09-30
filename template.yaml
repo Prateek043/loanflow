@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Loan Journey Viewer on AWS Lambda
+
+Parameters:
+  SessionSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Long random value used to encrypt Grafana login cookies
+  GrafanaUrl:
+    Type: String
+    Default: https://grafana.rupeek.com
+  LokiDatasourceUid:
+    Type: String
+    Default: eRl6oHbIk
+
+Resources:
+  ViewerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/lambda/
+      Handler: lambda.handler
+      Runtime: nodejs22.x
+      MemorySize: 512
+      Timeout: 300
+      Environment:
+        Variables:
+          SESSION_SECRET: !Ref SessionSecret
+          GRAFANA_URL: !Ref GrafanaUrl
+          LOKI_DS_UID: !Ref LokiDatasourceUid
+      FunctionUrlConfig:
+        AuthType: NONE
+
+Outputs:
+  ViewerUrl:
+    Description: Public HTTPS URL for the viewer (Grafana login required)
+    Value: !GetAtt ViewerFunctionUrl.FunctionUrl

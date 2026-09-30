@@ -33,6 +33,36 @@ to override their defaults. Local `.env` files are excluded from deployments.
 The deployed function must be able to reach Grafana to sign in and query logs.
 The login throttle is held in memory per function instance.
 
+## Deploy to AWS Lambda
+
+The Lambda handler accepts Function URL / API Gateway HTTP API payload version 2.0
+events. [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+and AWS credentials are needed to deploy. From the project root:
+
+```bash
+npm run build:lambda
+sam build
+sam deploy --guided
+```
+
+During guided deployment, choose a stack name and region, allow IAM role creation,
+and enter a new `SessionSecret` of at least 32 characters. Generate one with
+`openssl rand -hex 32`. Answer **No** when asked to save deployment arguments,
+so the secret is not written to `samconfig.toml`. Both SAM config formats are
+also gitignored.
+The stack output `ViewerUrl` is the HTTPS URL. The URL is publicly reachable;
+users still need their own Grafana credentials to access the app. The Lambda
+function needs outbound HTTPS access to Grafana. If your Grafana endpoint is
+private, configure network access in AWS before deploying.
+
+`npm run build:lambda` stages only `server.js`, `lambda.js`, and `public/` in
+`dist/lambda/`. Local `.env` files and dependencies used only by the local
+server are excluded. Rebuild with `npm run build:lambda && sam build` before
+each later `sam deploy --guided`. Set `GrafanaUrl` and `LokiDatasourceUid` parameters
+if the defaults differ. The login throttle is per warm Lambda instance, so it
+is not a global rate limit; put a shared rate limit in front of this URL if
+that is required for your deployment.
+
 ## Login
 
 Each person signs in with **their own Grafana username and password**, the same ones they use for grafana.rupeek.com. There are no shared credentials on the server.

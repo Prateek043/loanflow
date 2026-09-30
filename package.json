@@ -4,7 +4,9 @@
   "private": true,
   "description": "Funnel + API pipeline view of an lmApp loan request, built from Loki-prod logs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:lambda": "node scripts/build-lambda.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

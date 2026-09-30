@@ -15,8 +15,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const dotenv = require('dotenv');
-dotenv.config();
+// Local server loads .env; hosted runtimes supply environment variables directly.
+if (require.main === module) require('dotenv').config();
 
 const GRAFANA_URL = (process.env.GRAFANA_URL || 'https://grafana.rupeek.com').replace(/\/$/, '');
 const LOKI_DS_UID = process.env.LOKI_DS_UID || 'eRl6oHbIk';
